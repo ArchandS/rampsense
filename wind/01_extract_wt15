@@ -1,0 +1,45 @@
+"""Extract Penmanshiel WT15 (2017-2018) correctly from the SCADA zips and verify vs. the paper."""
+import zipfile, glob, sys
+from pathlib import Path
+import numpy as np
+import pandas as pd
+
+HERE = Path(__file__).resolve().parent
+UP = str(HERE)                                   # the two SCADA zips are in this same folder
+OUT = str(HERE / "WT15_2017_2018_correct.csv")
+
+COLS = {"# Date and time": "timestamp", "Wind speed (m/s)": "wind_speed",
+        "Wind direction (°)": "wind_direction", "Power (kW)": "power"}
+
+def read_year(zpath, turbine="15"):
+    with zipfile.ZipFile(zpath) as zf:
+        name = [n for n in zf.namelist() if n.startswith(f"Turbine_Data_Penmanshiel_{turbine}_")][0]
+        df = pd.read_csv(zf.open(name), skiprows=9, usecols=list(COLS), low_memory=False)
+    return df.rename(columns=COLS)
+
+df = pd.concat([read_year(z) for z in sorted(glob.glob(f"{UP}/*SCADA_201[78]*.zip"))])
+df["timestamp"] = pd.to_datetime(df["timestamp"])
+df = df.drop_duplicates("timestamp").set_index("timestamp").sort_index()
+df = df.loc["2017-01-01 00:00":"2018-12-31 23:50"]
+df = df.reindex(pd.date_range("2017-01-01", "2018-12-31 23:50", freq="10min"))   # strict 10-min grid
+df.index.name = "timestamp"
+
+raw_nan = df.isna().sum()
+# short gaps only (<=3 steps = 30 min); longer gaps stay NaN and are dropped when windows are built
+df = df.interpolate(limit=3, limit_area="inside")
+df["power"] = df["power"].clip(0, 2050)
+df["wd_sin"] = np.sin(np.deg2rad(df["wind_direction"]))
+df["wd_cos"] = np.cos(np.deg2rad(df["wind_direction"]))
+df.to_csv(OUT)
+
+# ---------------- verification against the paper ----------------
+RATED, EPS = 2050.0, 205.0
+d = df["power"].diff().abs().dropna()
+n_ore = int((d > EPS).sum())
+print("rows:", len(df), "(paper: 2 years @10min = 105,120)")
+print("NaN before interpolation:\n", raw_nan.to_string())
+print("power min/mean/max:", df.power.min(), round(df.power.mean(),1), df.power.max(), "(rated 2050)")
+print(f"ORE count: {n_ore}  share: {100*n_ore/len(d):.2f}%   (paper: 15,520 / 14.8%)")
+mag = d[d > EPS] / RATED * 100
+print(f"ramps with 10-20% magnitude: {100*((mag>=10)&(mag<=20)).mean():.1f}%   (paper: 77.3%)")
+print(f"ramps >50% of rated: {int((mag>50).sum())}")
