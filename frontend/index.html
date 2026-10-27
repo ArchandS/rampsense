@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RampSense — Ramp-Aware LSTM Forecasting & Analytics Dashboard</title>
+  <link rel="stylesheet" href="css/style.css">
+  <!-- Chart.js CDN with automatic fallback handled by app.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+  <!-- Top Global SCADA Navigation Header -->
+  <header>
+    <div class="brand">
+      <div class="logo-badge">⚡</div>
+      <div>
+        <div class="brand-title">RampSense SCADA</div>
+        <div class="brand-subtitle">Ramp-Aware Renewable Forecasting Platform</div>
+      </div>
+    </div>
+
+    <!-- Nav Tabs -->
+    <nav class="nav-tabs">
+      <button class="nav-tab active" data-target="tab-live">
+        <span>📡</span> Live Operations
+      </button>
+      <button class="nav-tab" data-target="tab-pv">
+        <span>☀️</span> Solar PV Analytics
+      </button>
+      <button class="nav-tab" data-target="tab-wind">
+        <span>💨</span> Wind WT15 & Direction
+      </button>
+      <button class="nav-tab" data-target="tab-benchmarks">
+        <span>🔬</span> Research & Ablation
+      </button>
+      <button class="nav-tab" data-target="tab-playground">
+        <span>⚡</span> Model Playground
+      </button>
+    </nav>
+
+    <!-- System Status & Clock -->
+    <div class="system-status">
+      <div id="backend-status-badge" class="status-pill">
+        <span class="status-dot"></span> CONNECTING...
+      </div>
+      <div id="scada-clock" style="font-family: monospace; font-size: 0.85rem; color: var(--text-muted);">
+        --:--:-- UTC
+      </div>
+    </div>
+  </header>
+
+  <!-- Global Ramp Alert Banner -->
+  <div id="global-alert-banner" class="alert-banner">
+    <div id="alert-banner-text">
+      <strong>🟢 SYSTEM INITIALIZED:</strong> Monitoring SolarTech Lab (245 Wp) & Penmanshiel WT15 (2050 kW) telemetry feeds.
+    </div>
+    <div style="display:flex; align-items:center; gap:0.75rem;">
+      <button id="btn-toggle-stream" class="btn btn-secondary" onclick="toggleStream()" style="padding:0.25rem 0.65rem; font-size:0.75rem;">
+        ⏸ Pause Telemetry
+      </button>
+    </div>
+  </div>
+
+  <main class="container">
+
+    <!-- ======================================================== -->
+    <!-- TAB 1: LIVE SCADA OPERATIONS                             -->
+    <!-- ======================================================== -->
+    <section id="tab-live" class="tab-content active">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title"><span>📡</span> Real-Time SCADA Telemetry & Ramp Alert Feed</h2>
+          <p class="section-desc">Continuous telemetry stream with sub-second ramp event detection across photovoltaic and wind power generators.</p>
+        </div>
+        <div id="system-info-summary" style="font-size:0.8rem; color:var(--text-muted);"></div>
+      </div>
+
+      <!-- Quick KPI Cards -->
+      <div class="grid-4">
+        <div class="glass-panel metric-card cyan">
+          <div class="metric-header">
+            <span class="metric-label">Solar PV Rating</span>
+            <span class="badge badge-blue">SolarTech</span>
+          </div>
+          <div class="metric-value" id="stat-pv-rating">245 Wp</div>
+          <div class="metric-sub">1-min resolution · 60m history window</div>
+        </div>
+
+        <div class="glass-panel metric-card emerald">
+          <div class="metric-header">
+            <span class="metric-label">PV Ramp-Aware Test F1</span>
+            <span class="badge badge-green">PSO Warm-Start</span>
+          </div>
+          <div class="metric-value" id="stat-pv-best-f1">0.347</div>
+          <div class="metric-sub">+35% gain vs MSE baseline (0.257)</div>
+        </div>
+
+        <div class="glass-panel metric-card amber">
+          <div class="metric-header">
+            <span class="metric-label">Wind Turbine Rating</span>
+            <span class="badge badge-amber">WT15 2.05MW</span>
+          </div>
+          <div class="metric-value" id="stat-wind-rating">2050 kW</div>
+          <div class="metric-sub">10-min resolution · Penmanshiel Wind Farm</div>
+        </div>
+
+        <div class="glass-panel metric-card indigo">
+          <div class="metric-header">
+            <span class="metric-label">Wind Direction Accuracy</span>
+            <span class="badge badge-purple">Signed Model</span>
+          </div>
+          <div class="metric-value" id="stat-wind-dir-acc">66.31%</div>
+          <div class="metric-sub">Ramp-Up F1 restored from 0.0% to 25.1%</div>
+        </div>
+      </div>
+
+      <!-- Live Operations SCADA Grid -->
+      <div class="grid-2-1">
+        <!-- Gauges Box -->
+        <div class="glass-panel" style="padding:1.25rem;">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem; flex-wrap:wrap; gap:0.5rem;">
+            <h3 style="font-size:1rem; font-weight:700; display:flex; align-items:center; gap:0.5rem;">
+              <span>⚡</span> Real-Time Generation Dial Gauges
+            </h3>
+            <div style="display:flex; align-items:center; gap:0.4rem; background:rgba(0,0,0,0.35); padding:0.25rem 0.5rem; border-radius:8px; border:1px solid var(--border-color);">
+              <span style="font-size:0.75rem; color:var(--text-muted); font-weight:600;">Solar Telemetry Mode:</span>
+              <button class="btn btn-secondary pv-slice-btn active" data-mode="daylight" style="padding:0.2rem 0.6rem; font-size:0.72rem;">☀️ Peak Sun & Ramps</button>
+              <button class="btn btn-secondary pv-slice-btn" data-mode="cloud_drop" style="padding:0.2rem 0.6rem; font-size:0.72rem;">⛅ Cloud Occlusion</button>
+              <button class="btn btn-secondary pv-slice-btn" data-mode="night" style="padding:0.2rem 0.6rem; font-size:0.72rem;">🌙 Night Baseline</button>
+            </div>
+          </div>
+          <div class="gauge-grid">
+            <div class="gauge-box">
+              <span class="metric-label">Solar PV Power</span>
+              <div class="gauge-val" id="gauge-pv-power" style="color:var(--accent-cyan);">-- W</div>
+              <span style="font-size:0.75rem; color:var(--text-dim);">SolarTech Lab Panel</span>
+            </div>
+            <div class="gauge-box">
+              <span class="metric-label">PV Ramp Rate</span>
+              <div class="gauge-val" id="gauge-pv-ramp" style="color:var(--accent-emerald);">-- W/min</div>
+              <span style="font-size:0.75rem; color:var(--text-dim);">Threshold: 12.25 W/min</span>
+            </div>
+            <div class="gauge-box">
+              <span class="metric-label">WT15 Wind Power</span>
+              <div class="gauge-val" id="gauge-wind-power" style="color:var(--accent-amber);">-- kW</div>
+              <span style="font-size:0.75rem; color:var(--text-dim);">Turbine Generation</span>
+            </div>
+            <div class="gauge-box">
+              <span class="metric-label">Wind Speed</span>
+              <div class="gauge-val" id="gauge-wind-speed" style="color:var(--accent-indigo);">-- m/s</div>
+              <span style="font-size:0.75rem; color:var(--text-dim);">Anemometer Reading</span>
+            </div>
+          </div>
+
+          <!-- Architecture Summary Infobox -->
+          <div style="margin-top:1.25rem; padding:1rem; background:rgba(6,182,212,0.06); border-radius:8px; border:1px solid rgba(6,182,212,0.2); font-size:0.82rem;">
+            <div style="font-weight:700; color:var(--accent-cyan); margin-bottom:0.35rem;">Scientific Architecture Note:</div>
+            MSE-only training penalizes large level errors, resulting in overly smoothed predictions that miss sharp ramp events. RampSense employs a multi-objective loss combining level accuracy with ramp F1 score, optimised via PSO gradient-free warm-starts on hard-F1 for PV, and differentiable signed soft-F1 for wind power.
+          </div>
+        </div>
+
+        <!-- Live SCADA Event Timeline -->
+        <div class="glass-panel" style="padding:1.25rem;">
+          <h3 style="font-size:1rem; font-weight:700; margin-bottom:1rem; display:flex; align-items:center; gap:0.5rem;">
+            <span>📋</span> Operational Alert Stream
+          </h3>
+          <div id="scada-event-feed" style="display:flex; flex-direction:column; gap:0.4rem; max-height:340px; overflow-y:auto;">
+            <!-- Appended dynamically -->
+          </div>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ======================================================== -->
+    <!-- TAB 2: SOLAR PV ANALYTICS                                -->
+    <!-- ======================================================== -->
+    <section id="tab-pv" class="tab-content">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title"><span>☀️</span> Solar PV Multi-Step Ramp Forecasting & Threshold Sweep</h2>
+          <p class="section-desc">SolarTech Lab (245 Wp, 1-min). 8-step target horizon (t+6 to t+13 min). Fixed label threshold = 12.25 W/min (5% rated).</p>
+        </div>
+        <!-- Dynamic Decision Threshold Slider -->
+        <div class="control-group">
+          <span style="font-size:0.8rem; font-weight:600; color:var(--text-muted);">Decision Threshold:</span>
+          <div class="slider-container">
+            <input type="range" id="pv-threshold-slider" class="custom-range" min="0.5" max="35.0" step="0.25" value="12.25">
+            <span id="pv-threshold-val" style="font-size:0.85rem; font-weight:700; color:var(--accent-cyan); min-width:80px;">12.25 W/min</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dynamic Evaluation Card -->
+      <div class="grid-3" style="margin-bottom:1.25rem;">
+        <div class="glass-panel metric-card cyan">
+          <div class="metric-header"><span class="metric-label">Dynamic Test F1</span><span class="badge badge-blue">Live Threshold</span></div>
+          <div class="metric-value" id="dynamic-pv-f1">0.347</div>
+          <div class="metric-sub">Calculated instantly from predicted max ramp</div>
+        </div>
+        <div class="glass-panel metric-card emerald">
+          <div class="metric-header"><span class="metric-label">Flagged Ramp Windows</span><span class="badge badge-green">PRE Flag</span></div>
+          <div class="metric-value" id="dynamic-pv-pre-count">--</div>
+          <div class="metric-sub">Predicted Ramp Events at chosen threshold</div>
+        </div>
+        <div class="glass-panel metric-card amber">
+          <div class="metric-header"><span class="metric-label">Optimal PSO Threshold</span><span class="badge badge-amber">Validation Tuned</span></div>
+          <div class="metric-value">11.0 W/min</div>
+          <div class="metric-sub">Learned close to true label threshold (12.25 W/min)</div>
+        </div>
+      </div>
+
+      <!-- Charts Grid -->
+      <div class="grid-2">
+        <div class="glass-panel" style="padding:1.25rem;">
+          <h3 style="font-size:0.95rem; font-weight:700; margin-bottom:0.75rem;">Actual vs Predicted Power Timeseries & Ramp Rate</h3>
+          <div class="chart-container">
+            <canvas id="chart-pv-timeseries"></canvas>
+          </div>
+        </div>
+        <div class="glass-panel" style="padding:1.25rem;">
+          <h3 style="font-size:0.95rem; font-weight:700; margin-bottom:0.75rem;">Validation Threshold Sweep (Adam vs PSO Warm-Start)</h3>
+          <div class="chart-container">
+            <canvas id="chart-pv-sweep"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Model Benchmark Table -->
+      <div class="glass-panel" style="padding:1.25rem;">
+        <h3 style="font-size:1rem; font-weight:700; margin-bottom:1rem;">Comprehensive PV Model Evaluation Results</h3>
+        <div class="data-table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Model</th>
+                <th>Val MSE</th>
+                <th>Val F1 (Opt)</th>
+                <th>Threshold A</th>
+                <th>Test MSE</th>
+                <th>Test MAE</th>
+                <th>Test F1 (A)</th>
+                <th>Test AP</th>
+                <th>Daylight AUC</th>
+              </tr>
+            </thead>
+            <tbody id="table-pv-models-body">
+              <!-- Populated via API -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ======================================================== -->
+    <!-- TAB 3: WIND WT15 RAMP & DIRECTION                        -->
+    <!-- ======================================================== -->
+    <section id="tab-wind" class="tab-content">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title"><span>💨</span> Penmanshiel WT15 SCADA & Direction-Aware Ramp Analysis</h2>
+          <p class="section-desc">Rated 2050 kW (10-min resolution). Ramp threshold ε = 205 kW (10% of rated). Differentiable soft-F1 surrogate.</p>
+        </div>
+        <div class="control-group">
+          <span style="font-size:0.8rem; font-weight:600; color:var(--text-muted);">Wind ε Threshold:</span>
+          <div class="slider-container">
+            <input type="range" id="wind-threshold-slider" class="custom-range" min="100" max="400" step="5" value="205">
+            <span id="wind-threshold-val" style="font-size:0.85rem; font-weight:700; color:var(--accent-amber); min-width:80px;">205.0 kW</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Charts Grid -->
+      <div class="grid-2">
+        <div class="glass-panel" style="padding:1.25rem;">
+          <h3 style="font-size:0.95rem; font-weight:700; margin-bottom:0.75rem;">WT15 Power Generation vs Wind Speed Timeseries</h3>
+          <div class="chart-container">
+            <canvas id="chart-wind-timeseries"></canvas>
+          </div>
+        </div>
+
+        <div class="glass-panel" style="padding:1.25rem;">
+          <h3 style="font-size:0.95rem; font-weight:700; margin-bottom:0.75rem;">Directional Breakdown: Ramp-Up vs Ramp-Down F1</h3>
+          <div class="chart-container">
+            <canvas id="chart-wind-direction"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Direction Comparison Table -->
+      <div class="glass-panel" style="padding:1.25rem; margin-bottom:1.5rem;">
+        <h3 style="font-size:1rem; font-weight:700; margin-bottom:0.5rem;">Directional Breakdown & Bias Analysis</h3>
+        <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:1rem;">Notice: <strong>phi_soft</strong> has F1_up = 0.0% (fails completely on ramp-ups). <strong>Signed Loss with Lag-6</strong> restores ramp-up F1 to 25.09% and raises Direction Accuracy to 66.31%.</p>
+        <div class="data-table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Model</th>
+                <th>Total F1 (%)</th>
+                <th>Ramp-Up F1 (%)</th>
+                <th>Ramp-Down F1 (%)</th>
+                <th>Direction Accuracy</th>
+                <th>RMSE (%)</th>
+                <th>MBE Up (%)</th>
+                <th>MBE Down (%)</th>
+              </tr>
+            </thead>
+            <tbody id="table-wind-direction-body">
+              <!-- Populated via API -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ======================================================== -->
+    <!-- TAB 4: RESEARCH BENCHMARKS & ABLATION                    -->
+    <!-- ======================================================== -->
+    <section id="tab-benchmarks" class="tab-content">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title"><span>🔬</span> Research Benchmark Suite & Ablation Studies</h2>
+          <p class="section-desc">Ablation on history lag (lag 1 vs lag 6), difference features, hidden sizes, and loss weight sweep (w1).</p>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="glass-panel" style="padding:1.25rem;">
+          <h3 style="font-size:0.95rem; font-weight:700; margin-bottom:0.75rem;">Loss Weight Trade-Off: F1 Score vs RMSE (w1 ∈ [0.0, 1.0])</h3>
+          <div class="chart-container">
+            <canvas id="chart-weight-sweep"></canvas>
+          </div>
+        </div>
+
+        <div class="glass-panel" style="padding:1.25rem; display:flex; flex-direction:column; justify-content:center;">
+          <h3 style="font-size:1rem; font-weight:700; margin-bottom:0.75rem; color:var(--accent-cyan);">Key Theoretical Takeaways</h3>
+          <ul style="font-size:0.85rem; color:var(--text-muted); line-height:1.7; padding-left:1.25rem;">
+            <li><strong style="color:#fff">Smoothness Paradox:</strong> Standard MSE optimizes conditional mean, penalizing large errors. This suppresses peak variances and makes MSE models completely blind to ramps at label threshold (F1 = 0.4%).</li>
+            <li><strong style="color:#fff">Ramp-Aware Objective:</strong> Adding an explicit F1 loss term φ = w1·MSE + w2·(1 - F1) yields high ramp recall (up to 55%), trading off ~20% level RMSE.</li>
+            <li><strong style="color:#fff">Lag History Impact:</strong> Increasing history from Lag 1 to Lag 6 is the single largest factor in restoring direction accuracy (57.1% → 66.3%).</li>
+            <li><strong style="color:#fff">Warm-Start Superiority:</strong> In high-dimensional optimization (d = 1608), random PSO starts stagnate. Seeding particles from an Adam solution achieves peak test AP of 0.290.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Ablation Table -->
+      <div class="glass-panel" style="padding:1.25rem; margin-top:1.5rem;">
+        <h3 style="font-size:1rem; font-weight:700; margin-bottom:1rem;">Wind Final Ablation Grid (10 Fresh Seeds)</h3>
+        <div class="data-table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Model Configuration</th>
+                <th>RMSE (% Rated)</th>
+                <th>Unsigned F1 (%)</th>
+                <th>Signed F1 (%)</th>
+                <th>F1 Up (%)</th>
+                <th>F1 Down (%)</th>
+                <th>Direction Acc</th>
+                <th>Train Time</th>
+              </tr>
+            </thead>
+            <tbody id="table-ablation-body">
+              <!-- Populated via API -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ======================================================== -->
+    <!-- TAB 5: MODEL PLAYGROUND & SIMULATOR                      -->
+    <!-- ======================================================== -->
+    <section id="tab-playground" class="tab-content">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title"><span>⚡</span> Live Model Playground & Inference Simulator</h2>
+          <p class="section-desc">Trigger real-time PyTorch LSTM inferences with simulated telemetry scenarios or custom operational parameters.</p>
+        </div>
+      </div>
+
+      <!-- Presets Selector -->
+      <div class="glass-panel" style="padding:1.25rem; margin-bottom:1.5rem;">
+        <div style="font-size:0.85rem; font-weight:700; margin-bottom:0.75rem; text-transform:uppercase; color:var(--text-dim);">
+          Select Real-World Operational Scenario:
+        </div>
+        <div style="display:flex; flex-wrap:wrap; gap:0.75rem;">
+          <button class="btn preset-btn active" data-preset="cloud_drop">
+            ☁️ Cloud Shadow Sudden Drop (Severe Ramp Down)
+          </button>
+          <button class="btn btn-secondary preset-btn" data-preset="solar_dawn_surge">
+            🌅 Morning Solar Dawn (Steep Ramp Up)
+          </button>
+          <button class="btn btn-secondary preset-btn" data-preset="overcast_stable">
+            🌫️ Overcast Sky (Stable Diffuse Light)
+          </button>
+          <button class="btn btn-secondary preset-btn" data-preset="fluctuating">
+            💨 Intermittent Broken Clouds (Choppy Ramps)
+          </button>
+        </div>
+      </div>
+
+      <!-- Live Playground Grid -->
+      <div class="grid-2">
+        <!-- PV Inference Card -->
+        <div class="glass-panel" style="padding:1.25rem;">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem;">
+            <h3 style="font-size:1rem; font-weight:700;">☀️ Solar PV Live PyTorch Inference</h3>
+            <button id="btn-run-custom-pv" class="btn" style="padding:0.4rem 0.85rem; font-size:0.78rem;">
+              ⚡ Execute Inference
+            </button>
+          </div>
+
+          <!-- Output Metrics -->
+          <div class="grid-3" style="margin-bottom:1rem;">
+            <div class="gauge-box" style="padding:0.6rem;">
+              <span class="metric-label" style="font-size:0.7rem;">Predicted Max Ramp</span>
+              <div id="res-pv-max-ramp" class="gauge-val" style="font-size:1.3rem; color:var(--accent-amber);">--</div>
+            </div>
+            <div class="gauge-box" style="padding:0.6rem;">
+              <span class="metric-label" style="font-size:0.7rem;">Ramp Classification</span>
+              <div style="margin-top:0.4rem;"><span id="res-pv-status" class="badge badge-green">NORMAL</span></div>
+            </div>
+            <div class="gauge-box" style="padding:0.6rem;">
+              <span class="metric-label" style="font-size:0.7rem;">Inference Latency</span>
+              <div id="res-pv-latency" class="gauge-val" style="font-size:1.1rem; color:var(--accent-cyan);">--</div>
+            </div>
+          </div>
+
+          <!-- Trajectory Chart -->
+          <div style="font-size:0.8rem; font-weight:600; color:var(--text-muted); margin-bottom:0.4rem;">
+            8-Step Future Power Horizon Forecast (t+6 to t+13 min):
+          </div>
+          <div style="height:190px; position:relative; margin-bottom:1rem;">
+            <canvas id="chart-trajectory"></canvas>
+          </div>
+
+          <div style="font-size:0.75rem; font-weight:600; color:var(--text-dim); margin-bottom:0.35rem;">Raw Backend Response:</div>
+          <pre id="res-pv-json" class="json-viewer">// Click "Execute Inference" to trigger live API</pre>
+        </div>
+
+        <!-- Wind Inference Card -->
+        <div class="glass-panel" style="padding:1.25rem;">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem;">
+            <h3 style="font-size:1rem; font-weight:700;">💨 Wind WT15 Parameter Inference</h3>
+            <button id="btn-run-wind-inference" class="btn" style="padding:0.4rem 0.85rem; font-size:0.78rem;">
+              ⚡ Evaluate Turbine
+            </button>
+          </div>
+
+          <!-- Input Fields -->
+          <div class="grid-2" style="margin-bottom:1rem; gap:0.75rem;">
+            <div>
+              <label style="font-size:0.75rem; color:var(--text-muted); display:block; margin-bottom:0.25rem;">Current Power (kW)</label>
+              <input type="number" id="input-wind-pwr" value="1250" style="width:100%; background:rgba(0,0,0,0.3); border:1px solid var(--border-color); color:#fff; padding:0.45rem; border-radius:6px;">
+            </div>
+            <div>
+              <label style="font-size:0.75rem; color:var(--text-muted); display:block; margin-bottom:0.25rem;">Wind Speed (m/s)</label>
+              <input type="number" id="input-wind-ws" value="11.5" step="0.5" style="width:100%; background:rgba(0,0,0,0.3); border:1px solid var(--border-color); color:#fff; padding:0.45rem; border-radius:6px;">
+            </div>
+            <div>
+              <label style="font-size:0.75rem; color:var(--text-muted); display:block; margin-bottom:0.25rem;">Wind Direction (deg)</label>
+              <input type="number" id="input-wind-wd" value="230" style="width:100%; background:rgba(0,0,0,0.3); border:1px solid var(--border-color); color:#fff; padding:0.45rem; border-radius:6px;">
+            </div>
+            <div>
+              <label style="font-size:0.75rem; color:var(--text-muted); display:block; margin-bottom:0.25rem;">Previous Power (kW)</label>
+              <input type="number" id="input-wind-prev" value="950" style="width:100%; background:rgba(0,0,0,0.3); border:1px solid var(--border-color); color:#fff; padding:0.45rem; border-radius:6px;">
+            </div>
+          </div>
+
+          <!-- Output Metrics -->
+          <div class="grid-3" style="margin-bottom:1rem;">
+            <div class="gauge-box" style="padding:0.6rem;">
+              <span class="metric-label" style="font-size:0.7rem;">Predicted ΔP</span>
+              <div id="res-wind-delta" class="gauge-val" style="font-size:1.3rem; color:var(--accent-amber);">--</div>
+            </div>
+            <div class="gauge-box" style="padding:0.6rem;">
+              <span class="metric-label" style="font-size:0.7rem;">Direction Status</span>
+              <div style="margin-top:0.4rem;"><span id="res-wind-status" class="badge badge-green">NORMAL</span></div>
+            </div>
+            <div class="gauge-box" style="padding:0.6rem;">
+              <span class="metric-label" style="font-size:0.7rem;">Latency</span>
+              <div id="res-wind-latency" class="gauge-val" style="font-size:1.1rem; color:var(--accent-cyan);">--</div>
+            </div>
+          </div>
+
+          <div style="font-size:0.75rem; font-weight:600; color:var(--text-dim); margin-bottom:0.35rem;">Raw Backend Response:</div>
+          <pre id="res-wind-json" class="json-viewer">// Click "Evaluate Turbine" to execute inference</pre>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <script src="js/app.js"></script>
+</body>
+</html>

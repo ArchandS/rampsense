@@ -1,0 +1,38 @@
+# Python & Virtual Environments
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv/
+
+# Large Datasets & Raw Data
+*.csv
+*.xlsx
+*.zip
+*.pdf
+*.docx
+*.pptx
+*.tex
+*.txt
+!requirements.txt
+PV dataset/
+wind dataset/
+Datafinalstep4graphs/
+figures/
+evaluation/
+wind/
+
+# System & IDE files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Root research & preprocessing scripts (exclude from dashboard repo)
+*.py
+!backend/*.py
+

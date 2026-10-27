@@ -102,3 +102,26 @@ Raw Renewable Energy Data
           ▼
  Proposed Soft-F1 +
  False-Negative Penalty
+
+
+---
+
+## 🖥️ Interactive SCADA Dashboard & Connected AI Backend
+
+RampSense includes an interactive industrial energy SCADA platform and multi-threaded Python backend for real-time monitoring and ultra-short-term ramp event forecasting for PV and Wind power.
+
+### Quick Start
+1. **Install Dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
+2. **Launch Dashboard**:
+   - **Windows Batch**: Double-click `start_dashboard.bat`
+   - **PowerShell**: `powershell -ExecutionPolicy Bypass -File .\start_dashboard.ps1`
+   - **Manual CLI**: `python backend/server.py 8000`
+3. **Open in Browser**:
+   ```
+   http://localhost:8000/
+   ```
+
+For comprehensive module descriptions, system architecture, and REST API documentation, see [README_DASHBOARD.md](README_DASHBOARD.md).
